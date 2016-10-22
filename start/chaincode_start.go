@@ -23,6 +23,9 @@ import (
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
 
+type Ballot struct {
+}
+
 // SimpleChaincode example simple Chaincode implementation
 type SimpleChaincode struct {
 }
@@ -42,7 +45,7 @@ func (t *SimpleChaincode) Init(stub *shim.ChaincodeStub, function string, args [
 	if len(args) != 1 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
-	err := stub.PutState("hello_world", []byte(args[0])) //initializes a key-value pair (hello_world), with the value of the first arg
+	err := stub.PutState("election", []byte(args[0])) //initializes a key-value pair (election, "election name")
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +81,7 @@ func (t *SimpleChaincode) write(stub *shim.ChaincodeStub, args []string) ([]byte
 		return nil, errors.New("Incorrect number of arguments. Expecting 2. name of the variable and value to set")
 	}
 
-	name = args[0] //rename for fun?
+	name = args[0]
 	value = args[1]
 
 	err = stub.PutState(name, []byte(value)) //writes a key-value pair with the given key and value paramenters
@@ -119,7 +122,7 @@ func (t *SimpleChaincode) read(stub *shim.ChaincodeStub, args []string) ([]byte,
 	name = args[0]
 	valAsbytes, err := stub.GetState(name) //gets value for the given key
 	if err != nil {
-		jsonResp = "{\"Error\":\"Failed to get state for " + name + "\"}"
+		jsonResp = "{\"Error\":\"Failed to get vote for " + name + "\"}"
 		return nil, errors.New(jsonResp)
 	}
 
