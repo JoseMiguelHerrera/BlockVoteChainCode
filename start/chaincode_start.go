@@ -1,29 +1,19 @@
-/*
-Copyright IBM Corp 2016 All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+//chaincode for simple referendum vote election
 
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
 
-type Ballot struct {
+type Referendum struct { //jose: this struct perhaps should be used in the data model. Right now it's all a flat key,val store.
+	referendumName string
+	noVotes        int
+	yesVotes       int
 }
 
 // SimpleChaincode example simple Chaincode implementation
@@ -45,7 +35,11 @@ func (t *SimpleChaincode) Init(stub *shim.ChaincodeStub, function string, args [
 	if len(args) != 1 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
-	err := stub.PutState("election", []byte(args[0])) //initializes a key-value pair (election, "election name")
+
+	newRef := Referendum{referendumName: args[0], noVotes: 0, yesVotes: 0}
+	jsonRef, err := json.Marshal(newRef)
+
+	err = stub.PutState("election", []byte(jsonRef)) //initializes a key-value pair (election, "election name")
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +78,11 @@ func (t *SimpleChaincode) write(stub *shim.ChaincodeStub, args []string) ([]byte
 	name = args[0]
 	value = args[1]
 
-	err = stub.PutState(name, []byte(value)) //writes a key-value pair with the given key and value paramenters
+	//TODO: check if this user has already voted
+	//if user has already voted, return with message
+	//else, proceed to vote
+
+	err = stub.PutState(name, []byte(value)) //JOSE: writes a key-value pair with the given key and value paramenters. We need to introduce a more complex data model that includes an increasing vote ID, for iterating over votes.
 
 	if err != nil {
 		return nil, err
