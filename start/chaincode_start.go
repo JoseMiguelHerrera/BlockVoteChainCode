@@ -3,9 +3,10 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
@@ -36,13 +37,28 @@ func (t *SimpleChaincode) Init(stub *shim.ChaincodeStub, function string, args [
 		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
 
+	/* //for data future model expansion
 	newRef := Referendum{referendumName: args[0], noVotes: 0, yesVotes: 0}
 	jsonRef, err := json.Marshal(newRef)
+	*/
 
-	err = stub.PutState("election", []byte(jsonRef)) //initializes a key-value pair (election, "election name")
+	err := stub.PutState("election", []byte(args[0])) //initializes a key-value pair (election, "election name")
 	if err != nil {
 		return nil, err
 	}
+
+	yesVotes := strconv.Itoa(0)
+	noVotes := strconv.Itoa(0)
+	err = stub.PutState("noVotes", []byte(noVotes)) //initializes a key-value pair (election, "election name")
+	if err != nil {
+		return nil, err
+	}
+
+	err = stub.PutState("yesVotes", []byte(yesVotes)) //initializes a key-value pair (election, "election name")
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, nil
 }
 
@@ -81,6 +97,28 @@ func (t *SimpleChaincode) write(stub *shim.ChaincodeStub, args []string) ([]byte
 	//TODO: check if this user has already voted
 	//if user has already voted, return with message
 	//else, proceed to vote
+
+	yesVotesBytes, err := stub.GetState("yesVotes") //gets value for the given key
+	noVotesBytes, err := stub.GetState("noVotes")   //gets value for the given key
+
+	noVotes, err := strconv.Atoi(string(noVotesBytes))
+	yesVotes, err := strconv.Atoi(string(yesVotesBytes))
+
+	if strings.TrimRight(value, "\n") == "yes" {
+		yesVotes++
+
+		err = stub.PutState("yesVotes", []byte(strconv.Itoa(yesVotes))) //initializes a key-value pair (election, "election name")
+		if err != nil {
+			return nil, err
+		}
+
+	} else if strings.TrimRight(value, "\n") == "no" {
+		noVotes++
+		err = stub.PutState("noVotes", []byte(strconv.Itoa(noVotes))) //initializes a key-value pair (election, "election name")
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	err = stub.PutState(name, []byte(value)) //JOSE: writes a key-value pair with the given key and value paramenters. We need to introduce a more complex data model that includes an increasing vote ID, for iterating over votes.
 
