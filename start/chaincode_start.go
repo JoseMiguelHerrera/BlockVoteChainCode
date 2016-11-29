@@ -103,7 +103,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 		return nil, err
 	}
 	if string(preExistVote) != "" { //if person has already voted
-		return []byte("alreadyVoted"), errors.New(name + " has already voted")
+		return nil, errors.New("already voted")
 	}
 
 	yesVotesBytes, err := stub.GetState("yesVotes") //gets value for the given key
