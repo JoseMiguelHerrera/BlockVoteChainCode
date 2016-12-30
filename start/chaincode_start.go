@@ -140,11 +140,8 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 			return nil, err
 		}
 
-	} else {
-		return nil, errors.New("Already voted")
 	}
-
-	return nil, nil
+	return nil, errors.New("Already voted")
 }
 
 // Query is our entry point for queries
