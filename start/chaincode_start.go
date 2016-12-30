@@ -102,49 +102,48 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	//if user has already voted, return with message
 	//else, proceed to vote
 
-	preExistVote, err := stub.GetState(name) //gets value for the given key
-	if err != nil {
-		//return nil, err
-	}
-	if preExistVote == nil { //if person has not already voted
-		metadataRaw, err := stub.GetState("electionMetaData")
-		if err != nil { //get state error
-			return nil, err
-		}
-
-		var metaDataStructToUpdate Referendum
-		err = json.Unmarshal(metadataRaw, &metaDataStructToUpdate)
-		if err != nil { //unmarshalling error
-			return nil, err
-		}
-
-		if strings.TrimRight(value, "\n") == "yes" {
-			metaDataStructToUpdate.YesVotes++
-
-		} else if strings.TrimRight(value, "\n") == "no" {
-			metaDataStructToUpdate.NoVotes++
-		}
-
-		electionMetaDataJSON, err := json.Marshal(metaDataStructToUpdate) //golang JSON (byte array)
-		if err != nil {                                                   //marshall error
-			return nil, err
-		}
-
-		err = stub.PutState("electionMetaData", electionMetaDataJSON) //writes the key-value pair (electionMetaData, json object)
+	/*
+		preExistVote, err := stub.GetState(name) //gets value for the given key
 		if err != nil {
 			return nil, err
 		}
+	*/
 
-		err = stub.PutState(name, []byte(value)) //JOSE: writes a key-value pair with the given key and value paramenters. We need to introduce a more complex data model that includes an increasing vote ID, for iterating over votes.
-		if err != nil {                          //putstate error
-			return nil, err
-		}
-
-	} else {
-		jsonResp := "test error, user already voted"
-		return nil, errors.New(jsonResp)
+	//if person has not already voted
+	metadataRaw, err := stub.GetState("electionMetaData")
+	if err != nil { //get state error
+		return nil, err
 	}
-	return nil, errors.New("Already voted")
+
+	var metaDataStructToUpdate Referendum
+	err = json.Unmarshal(metadataRaw, &metaDataStructToUpdate)
+	if err != nil { //unmarshalling error
+		return nil, err
+	}
+
+	if strings.TrimRight(value, "\n") == "yes" {
+		metaDataStructToUpdate.YesVotes++
+
+	} else if strings.TrimRight(value, "\n") == "no" {
+		metaDataStructToUpdate.NoVotes++
+	}
+
+	electionMetaDataJSON, err := json.Marshal(metaDataStructToUpdate) //golang JSON (byte array)
+	if err != nil {                                                   //marshall error
+		return nil, err
+	}
+
+	err = stub.PutState("electionMetaData", electionMetaDataJSON) //writes the key-value pair (electionMetaData, json object)
+	if err != nil {
+		return nil, err
+	}
+
+	err = stub.PutState(name, []byte(value)) //JOSE: writes a key-value pair with the given key and value paramenters. We need to introduce a more complex data model that includes an increasing vote ID, for iterating over votes.
+	if err != nil {                          //putstate error
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 // Query is our entry point for queries
