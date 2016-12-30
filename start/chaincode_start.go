@@ -195,7 +195,7 @@ func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function strin
 
 func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
 	var name string
-	//var jsonResp string
+	var jsonResp string
 
 	var err error
 
@@ -206,9 +206,9 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 	name = args[0]
 	valAsbytes, err := stub.GetState(name) //gets value for the given key
 
-	if err != nil {
-		//jsonResp = "{\"Error\":\"Failed to get vote for " + name + "\"}"
-		//return []byte(jsonResp), errors.New(jsonResp)
+	if valAsbytes == nil {
+		jsonResp = "{\"Error\":\"Failed to get vote for " + name + "\"}"
+		return []byte(jsonResp), errors.New(jsonResp)
 	}
 
 	return valAsbytes, nil
