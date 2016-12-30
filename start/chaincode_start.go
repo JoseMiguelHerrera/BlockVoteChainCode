@@ -106,8 +106,9 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	if err != nil {
 		return nil, err
 	}
-	if string(preExistVote) != "" { //if person has already voted
-		return nil, errors.New("already voted")
+	if preExistVote == nil { //if person has already voted
+		jsonResp := "{\"Error\":\"Failed to register vote for " + name + " as they already voted\"}"
+		return nil, errors.New(jsonResp)
 	}
 
 	metadataRaw, err := stub.GetState("electionMetaData")
@@ -137,37 +138,6 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	if err != nil {
 		return nil, err
 	}
-
-	/*
-		yesVotesBytes, err := stub.GetState("yesVotes") //gets value for the given key
-		if err != nil {
-			return nil, err
-		}
-		noVotesBytes, err := stub.GetState("noVotes") //gets value for the given key
-		if err != nil {
-			return nil, err
-		}
-
-		noVotes, err := strconv.Atoi(string(noVotesBytes))
-		yesVotes, err := strconv.Atoi(string(yesVotesBytes))
-
-		if strings.TrimRight(value, "\n") == "yes" {
-			yesVotes++
-
-			err = stub.PutState("yesVotes", []byte(strconv.Itoa(yesVotes))) //initializes a key-value pair (election, "election name")
-			if err != nil {
-				return nil, err
-			}
-
-		} else if strings.TrimRight(value, "\n") == "no" {
-			noVotes++
-			err = stub.PutState("noVotes", []byte(strconv.Itoa(noVotes))) //initializes a key-value pair (election, "election name")
-			if err != nil {
-				return nil, err
-			}
-		}
-
-	*/
 
 	err = stub.PutState(name, []byte(value)) //JOSE: writes a key-value pair with the given key and value paramenters. We need to introduce a more complex data model that includes an increasing vote ID, for iterating over votes.
 	if err != nil {                          //putstate error
@@ -207,7 +177,7 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 		return nil, err
 	}
 
-	if valAsbytes == nil {
+	if valAsbytes == nil { //vote doesn't exit
 		jsonResp = "{\"Error\":\"Failed to get vote for " + name + "\"}"
 		return nil, errors.New(jsonResp)
 	}
