@@ -35,13 +35,13 @@ func main() { //main function executes when each peer deploys its instance of th
 
 // Init resets all the things
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-	if len(args) != 1 {
+	if len(args) != 3 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
 
 	//create data model
-	electionMetaData := &Referendum{ReferendumName: args[0], ParentReferendumName: args[1], NoVotes: 0, YesVotes: 0} //golang struct
-	electionMetaDataJSON, err := json.Marshal(electionMetaData)                                                      //golang JSON (byte array)
+	electionMetaData := &Referendum{ReferendumName: args[0], ParentReferendumName: args[1], BlockchainID: args[2], NoVotes: 0, YesVotes: 0} //golang struct
+	electionMetaDataJSON, err := json.Marshal(electionMetaData)                                                                             //golang JSON (byte array)
 	if err != nil {
 		return nil, err
 	}
