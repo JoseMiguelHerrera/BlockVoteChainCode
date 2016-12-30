@@ -107,8 +107,8 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 		return nil, err
 	}
 	if preExistVote != nil { //if person has already voted
-		jsonResp := "{\"Error\":\"Failed to register vote for " + name + " as they already voted\"}"
-		return nil, errors.New(jsonResp)
+		resp := "Already Voted!!"
+		return nil, errors.New(resp)
 	}
 
 	metadataRaw, err := stub.GetState("electionMetaData")
