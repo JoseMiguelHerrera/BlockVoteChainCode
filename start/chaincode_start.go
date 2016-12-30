@@ -159,6 +159,8 @@ func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function strin
 		return nil, nil
 	} else if function == "read" {
 		return t.read(stub, args)
+	} else if function == "error" {
+		return t.error(stub, args)
 	}
 	fmt.Println("query did not find func: " + function) //error
 
