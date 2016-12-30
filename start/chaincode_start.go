@@ -207,7 +207,7 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 	valAsbytes, err := stub.GetState(name) //gets value for the given key
 	if err != nil {
 		jsonResp = "{\"Error\":\"Failed to get vote for " + name + "\"}"
-		return nil, errors.New(jsonResp)
+		return []byte(jsonResp), errors.New(jsonResp)
 	}
 
 	return valAsbytes, nil
