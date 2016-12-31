@@ -80,9 +80,7 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function stri
 	}
 
 	fmt.Println("invoke did not find func: " + function) //error
-
-	return []byte("error"), nil
-	//return []byte("error"), errors.New("Received unknown function invocation")
+	return nil, errors.New("Received unknown function invocation")
 }
 
 func (t *SimpleChaincode) error(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
@@ -106,12 +104,13 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	//if user has already voted, return with message
 	//else, proceed to vote
 
-	/*
-		preExistVote, err := stub.GetState(name) //gets value for the given key
-		if err != nil {
-			return nil, err
-		}
-	*/
+	preExistVote, err := stub.GetState(name) //gets value for the given key
+	if err != nil {
+		return nil, err
+	}
+	if preExistVote != nil { //vote already exists
+		return nil, errors.New("vote already exists")
+	}
 
 	//if person has not already voted
 	metadataRaw, err := stub.GetState("electionMetaData")
@@ -182,7 +181,7 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 		return nil, err
 	}
 
-	if valAsbytes == nil { //vote doesn't exit
+	if valAsbytes == nil { //vote doesn't exist
 		jsonResp = "{\"Error\":\"Failed to get vote for " + name + "\"}"
 		return nil, errors.New(jsonResp)
 	}
