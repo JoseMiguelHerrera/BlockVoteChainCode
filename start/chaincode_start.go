@@ -14,7 +14,6 @@ import (
 type Referendum struct { //jose: this struct perhaps should be used in the data model. Right now it's all a flat key,val store.
 	ReferendumName       string
 	ParentReferendumName string
-	BlockchainID         string
 	NoVotes              int
 	YesVotes             int
 }
@@ -35,13 +34,13 @@ func main() { //main function executes when each peer deploys its instance of th
 
 // Init resets all the things
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-	if len(args) != 3 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 3")
+	if len(args) != 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 2")
 	}
 
 	//create data model
-	electionMetaData := &Referendum{ReferendumName: args[0], ParentReferendumName: args[1], BlockchainID: args[2], NoVotes: 0, YesVotes: 0} //golang struct
-	electionMetaDataJSON, err := json.Marshal(electionMetaData)                                                                             //golang JSON (byte array)
+	electionMetaData := &Referendum{ReferendumName: args[0], ParentReferendumName: args[1], NoVotes: 0, YesVotes: 0} //golang struct
+	electionMetaDataJSON, err := json.Marshal(electionMetaData)                                                      //golang JSON (byte array)
 	if err != nil {
 		return nil, errors.New("Marshalling has failed")
 	}
@@ -50,19 +49,7 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string
 	if err != nil {
 		return nil, errors.New("put state has failed")
 	}
-	/*
-		yesVotes := strconv.Itoa(0)
-		noVotes := strconv.Itoa(0)
-		err = stub.PutState("noVotes", []byte(noVotes)) //initializes a key-value pair (election, "election name")
-		if err != nil {
-			return nil, err
-		}
 
-		err = stub.PutState("yesVotes", []byte(yesVotes)) //initializes a key-value pair (election, "election name")
-		if err != nil {
-			return nil, err
-		}
-	*/
 	return nil, nil
 }
 
