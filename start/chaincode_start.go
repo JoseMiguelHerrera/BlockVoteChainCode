@@ -15,6 +15,8 @@ import (
 type referendumMetaData struct {
 	ReferendumName    string
 	NumberOfDistricts int
+	TotalNoVotes      int
+	TotalYesVotes     int
 }
 
 type districtReferendum struct {
@@ -49,7 +51,7 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string
 	if err != nil {
 		return nil, err
 	}
-	metaData := &referendumMetaData{ReferendumName: args[0], NumberOfDistricts: numDistricts}
+	metaData := &referendumMetaData{ReferendumName: args[0], NumberOfDistricts: numDistricts, TotalNoVotes: 0, TotalYesVotes: 0}
 	metaDataJSON, err := json.Marshal(metaData) //golang JSON (byte array)
 	if err != nil {
 		return nil, errors.New("Marshalling for metadata struct has failed")
@@ -60,15 +62,19 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string
 	}
 
 	//create data model for districts
-	districtData := &districtReferendum{DistrictName: args[2], NoVotes: 0, YesVotes: 0, Votes: make(map[string]string)} //golang struct
-	districtDataJSON, err := json.Marshal(districtData)                                                                 //golang JSON (byte array)
-	if err != nil {
-		return nil, errors.New("Marshalling for district struct has failed")
-	}
+	i := 0
+	for i < numDistricts {
+		districtData := &districtReferendum{DistrictName: args[i+2], NoVotes: 0, YesVotes: 0, Votes: make(map[string]string)} //golang struct
+		districtDataJSON, err := json.Marshal(districtData)                                                                   //golang JSON (byte array)
+		if err != nil {
+			return nil, errors.New("Marshalling for district struct has failed")
+		}
 
-	err = stub.PutState(args[2], districtDataJSON) //writes the key-value pair (args[0] (district name), json object)
-	if err != nil {
-		return nil, errors.New("put state of district data has failed")
+		err = stub.PutState(args[i+2], districtDataJSON) //writes the key-value pair (args[0] (district name), json object)
+		if err != nil {
+			return nil, errors.New("put state of district data has failed")
+		}
+		i++
 	}
 
 	return nil, nil
