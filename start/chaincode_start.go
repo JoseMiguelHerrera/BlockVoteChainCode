@@ -66,7 +66,7 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string
 		return nil, errors.New("Marshalling for district struct has failed")
 	}
 
-	err = stub.PutState(args[0], districtDataJSON) //writes the key-value pair (args[0] (district name), json object)
+	err = stub.PutState(args[2], districtDataJSON) //writes the key-value pair (args[0] (district name), json object)
 	if err != nil {
 		return nil, errors.New("put state of district data has failed")
 	}
