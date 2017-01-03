@@ -102,47 +102,79 @@ func (t *SimpleChaincode) error(stub shim.ChaincodeStubInterface, args []string)
 }
 
 func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-
+	//todo: check if user has already voted...in the other districts
 	var name string
+	var district string
 	var value string
+
 	var err error
 
-	if len(args) != 2 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 2. name of the variable and value to set")
+	if len(args) != 3 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 2. ID of the person, district to vote in, and value to set")
 	}
 
 	name = args[0]
-	value = args[1]
+	district = args[1]
+	value = args[2]
 
-	//TODO: check if this user has already voted
-	//if user has already voted, return with message
-	//else, proceed to vote
-
-	preExistVote, err := stub.GetState(name) //gets value for the given key
+	//check if given district exists
+	votingDistrictRaw, err := stub.GetState(district)
 	if err != nil {
 		return nil, err
 	}
-	if preExistVote != nil { //vote already exists
+	if votingDistrictRaw == nil { //district doesn't exist
+		return nil, errors.New("given district " + district + " doesn't exist")
+	}
+	//get district
+	var votingDistrictToUpdate districtReferendum
+	err = json.Unmarshal(votingDistrictRaw, &votingDistrictToUpdate)
+	if err != nil { //unmarshalling error
+		return nil, err
+	}
+
+	//check if this user has already voted in THIS district
+	vote := votingDistrictToUpdate.Votes[name]
+	if vote == "" {
 		return nil, errors.New("vote already exists")
 	}
 
-	//if person has not already voted
-	metadataRaw, err := stub.GetState("electionMetaData")
+	//if person has not already voted, update district data
+	votingDistrictToUpdate.Votes[name] = value
+	if strings.TrimRight(value, "\n") == "yes" {
+		votingDistrictToUpdate.YesVotes++
+
+	} else if strings.TrimRight(value, "\n") == "no" {
+		votingDistrictToUpdate.NoVotes++
+	} else {
+		return nil, errors.New("vote needs to be a yes or no")
+	}
+
+	NewDistrictDataJSON, err := json.Marshal(votingDistrictToUpdate) //golang JSON (byte array)
+	if err != nil {                                                  //marshall error
+		return nil, err
+	}
+	err = stub.PutState("district", NewDistrictDataJSON) //writes the key-value pair (electionMetaData, json object)
+	if err != nil {
+		return nil, err
+	}
+
+	//update metadata too
+	metadataRaw, err := stub.GetState("metadata")
 	if err != nil { //get state error
 		return nil, err
 	}
 
-	var metaDataStructToUpdate districtReferendum
+	var metaDataStructToUpdate referendumMetaData
 	err = json.Unmarshal(metadataRaw, &metaDataStructToUpdate)
 	if err != nil { //unmarshalling error
 		return nil, err
 	}
 
 	if strings.TrimRight(value, "\n") == "yes" {
-		metaDataStructToUpdate.YesVotes++
+		metaDataStructToUpdate.TotalYesVotes++
 
 	} else if strings.TrimRight(value, "\n") == "no" {
-		metaDataStructToUpdate.NoVotes++
+		metaDataStructToUpdate.TotalNoVotes++
 	}
 
 	electionMetaDataJSON, err := json.Marshal(metaDataStructToUpdate) //golang JSON (byte array)
@@ -150,13 +182,8 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 		return nil, err
 	}
 
-	err = stub.PutState("electionMetaData", electionMetaDataJSON) //writes the key-value pair (electionMetaData, json object)
+	err = stub.PutState("metadata", electionMetaDataJSON) //writes the key-value pair (electionMetaData, json object)
 	if err != nil {
-		return nil, err
-	}
-
-	err = stub.PutState(name, []byte(value)) //JOSE: writes a key-value pair with the given key and value paramenters. We need to introduce a more complex data model that includes an increasing vote ID, for iterating over votes.
-	if err != nil {                          //putstate error
 		return nil, err
 	}
 
