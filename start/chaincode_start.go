@@ -11,11 +11,11 @@ import (
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
 
-type Referendum struct { //jose: this struct perhaps should be used in the data model. Right now it's all a flat key,val store.
-	ReferendumName       string
-	ParentReferendumName string
-	NoVotes              int
-	YesVotes             int
+type districtReferendum struct {
+	DistrictName string
+	NoVotes      int
+	YesVotes     int
+	Votes        map[string]string //maps vote ID to vote
 }
 
 // SimpleChaincode example simple Chaincode implementation
@@ -34,18 +34,18 @@ func main() { //main function executes when each peer deploys its instance of th
 
 // Init resets all the things
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-	if len(args) != 2 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 2")
+	if len(args) == 0 {
+		return nil, errors.New("Incorrect number of arguments. Expecting at least one district")
 	}
 
 	//create data model
-	electionMetaData := &Referendum{ReferendumName: args[0], ParentReferendumName: args[1], NoVotes: 0, YesVotes: 0} //golang struct
-	electionMetaDataJSON, err := json.Marshal(electionMetaData)                                                      //golang JSON (byte array)
+	electionMetaData := &districtReferendum{DistrictName: args[0], NoVotes: 0, YesVotes: 0, Votes: make(map[string]string)} //golang struct
+	electionMetaDataJSON, err := json.Marshal(electionMetaData)                                                             //golang JSON (byte array)
 	if err != nil {
 		return nil, errors.New("Marshalling has failed")
 	}
 
-	err = stub.PutState("electionMetaData", electionMetaDataJSON) //writes the key-value pair (electionMetaData, json object)
+	err = stub.PutState(args[0], electionMetaDataJSON) //writes the key-value pair (args[0] (district name), json object)
 	if err != nil {
 		return nil, errors.New("put state has failed")
 	}
@@ -105,7 +105,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 		return nil, err
 	}
 
-	var metaDataStructToUpdate Referendum
+	var metaDataStructToUpdate districtReferendum
 	err = json.Unmarshal(metadataRaw, &metaDataStructToUpdate)
 	if err != nil { //unmarshalling error
 		return nil, err
