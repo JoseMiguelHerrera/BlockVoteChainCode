@@ -153,7 +153,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	if err != nil {                                                  //marshall error
 		return nil, err
 	}
-	err = stub.PutState("district", NewDistrictDataJSON) //writes the key-value pair (electionMetaData, json object)
+	err = stub.PutState(district, NewDistrictDataJSON) //writes the key-value pair (electionMetaData, json object)
 	if err != nil {
 		return nil, err
 	}
