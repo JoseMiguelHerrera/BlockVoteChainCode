@@ -6,10 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
+
+type referendumMetaData struct {
+	ReferendumName    string
+	NumberOfDistricts int
+}
 
 type districtReferendum struct {
 	DistrictName string
@@ -34,20 +40,35 @@ func main() { //main function executes when each peer deploys its instance of th
 
 // Init resets all the things
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-	if len(args) == 0 {
-		return nil, errors.New("Incorrect number of arguments. Expecting at least one district")
+	if len(args) < 3 {
+		return nil, errors.New("Incorrect number of arguments. Expecting at least one district name, the number of districts, and the ref name")
 	}
 
-	//create data model
-	electionMetaData := &districtReferendum{DistrictName: args[0], NoVotes: 0, YesVotes: 0, Votes: make(map[string]string)} //golang struct
-	electionMetaDataJSON, err := json.Marshal(electionMetaData)                                                             //golang JSON (byte array)
+	//create meta data
+	numDistricts, err := strconv.Atoi(args[1])
 	if err != nil {
-		return nil, errors.New("Marshalling has failed")
+		return nil, err
+	}
+	metaData := &referendumMetaData{ReferendumName: args[0], NumberOfDistricts: numDistricts}
+	metaDataJSON, err := json.Marshal(metaData) //golang JSON (byte array)
+	if err != nil {
+		return nil, errors.New("Marshalling for metadata struct has failed")
+	}
+	err = stub.PutState("metadata", metaDataJSON) //writes the key-value pair ("metadata", json object)
+	if err != nil {
+		return nil, errors.New("put state of meta data has failed")
 	}
 
-	err = stub.PutState(args[0], electionMetaDataJSON) //writes the key-value pair (args[0] (district name), json object)
+	//create data model for districts
+	districtData := &districtReferendum{DistrictName: args[2], NoVotes: 0, YesVotes: 0, Votes: make(map[string]string)} //golang struct
+	districtDataJSON, err := json.Marshal(districtData)                                                                 //golang JSON (byte array)
 	if err != nil {
-		return nil, errors.New("put state has failed")
+		return nil, errors.New("Marshalling for district struct has failed")
+	}
+
+	err = stub.PutState(args[0], districtDataJSON) //writes the key-value pair (args[0] (district name), json object)
+	if err != nil {
+		return nil, errors.New("put state of district data has failed")
 	}
 
 	return nil, nil
