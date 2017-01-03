@@ -125,6 +125,16 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	if votingDistrictRaw == nil { //district doesn't exist
 		return nil, errors.New("given district " + district + " doesn't exist")
 	}
+	//get metadata
+	metadataRaw, err := stub.GetState("metadata")
+	if err != nil { //get state error
+		return nil, err
+	}
+	var metaDataStructToUpdate referendumMetaData
+	err = json.Unmarshal(metadataRaw, &metaDataStructToUpdate)
+	if err != nil { //unmarshalling error
+		return nil, err
+	}
 	//get district
 	var votingDistrictToUpdate districtReferendum
 	err = json.Unmarshal(votingDistrictRaw, &votingDistrictToUpdate)
@@ -132,9 +142,12 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 		return nil, err
 	}
 
-	//check if this user has already voted in THIS district
-	vote := votingDistrictToUpdate.Votes[name]
-	if vote != "" {
+	//check if user has voted, in any district
+	preExistVote, err := stub.GetState(name) //gets value for the given key
+	if err != nil {
+		return nil, err
+	}
+	if preExistVote != nil { //vote already exists
 		return nil, errors.New("vote already exists")
 	}
 
@@ -159,17 +172,6 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	}
 
 	//update metadata too
-	metadataRaw, err := stub.GetState("metadata")
-	if err != nil { //get state error
-		return nil, err
-	}
-
-	var metaDataStructToUpdate referendumMetaData
-	err = json.Unmarshal(metadataRaw, &metaDataStructToUpdate)
-	if err != nil { //unmarshalling error
-		return nil, err
-	}
-
 	if strings.TrimRight(value, "\n") == "yes" {
 		metaDataStructToUpdate.TotalYesVotes++
 
@@ -183,6 +185,11 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	}
 
 	err = stub.PutState("metadata", electionMetaDataJSON) //writes the key-value pair (electionMetaData, json object)
+	if err != nil {
+		return nil, err
+	}
+
+	err = stub.PutState(name, []byte(value)) //write name of voter at global level to easily detect if someone has already voted in ANY district
 	if err != nil {
 		return nil, err
 	}
