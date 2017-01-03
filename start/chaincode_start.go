@@ -134,7 +134,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 
 	//check if this user has already voted in THIS district
 	vote := votingDistrictToUpdate.Votes[name]
-	if vote == "" {
+	if vote != "" {
 		return nil, errors.New("vote already exists")
 	}
 
