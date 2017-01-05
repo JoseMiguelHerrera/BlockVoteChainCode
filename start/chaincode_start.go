@@ -42,6 +42,8 @@ func main() { //main function executes when each peer deploys its instance of th
 
 // Init resets all the things
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
+	//args: 0: name of referendum, 1: number of districts in referendum, 2+: names of districts
+
 	if len(args) < 3 {
 		return nil, errors.New("Incorrect number of arguments. Expecting at least one district name, the number of districts, and the ref name")
 	}
@@ -102,7 +104,7 @@ func (t *SimpleChaincode) error(stub shim.ChaincodeStubInterface, args []string)
 }
 
 func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	//todo: check if user has already voted...in the other districts
+	//args: 0: name of person voting, 1: district where voting, 2: value of vote
 	var name string
 	var district string
 	var value string
@@ -216,6 +218,7 @@ func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function strin
 }
 
 func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	//args: 0: data being read
 	var name string
 	var jsonResp string
 
