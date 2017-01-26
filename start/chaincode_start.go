@@ -17,6 +17,8 @@ type referendumMetaData struct {
 	NumberOfDistricts int
 	TotalNoVotes      int
 	TotalYesVotes     int
+	VoteOptions       []string
+	Districts         []string
 }
 
 type districtReferendum struct {
@@ -27,7 +29,7 @@ type districtReferendum struct {
 }
 
 type voterState struct {
-	CanVote      string
+	Authorized   string
 	HasVoted     string
 	RegisteredBy string
 }
@@ -50,30 +52,36 @@ func main() { //main function executes when each peer deploys its instance of th
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	//args: 0: name of referendum, 1: number of districts in referendum, 2+: names of districts
 
-	if len(args) < 3 {
-		return nil, errors.New("Incorrect number of arguments. Expecting at least one district name, the number of districts, and the ref name")
+	if len(args) < 6 {
+		return nil, errors.New("Incorrect number of arguments for init. Expecting at least: one district name, the number of districts, the number of vote options, at least 2 vote options, and the ref name. Check config file") //IN NODE TOO!
 	}
 
-	//create meta data
+	//extract indexing help
 	numDistricts, err := strconv.Atoi(args[1])
 	if err != nil {
 		return nil, err
 	}
-	metaData := &referendumMetaData{ReferendumName: args[0], NumberOfDistricts: numDistricts, TotalNoVotes: 0, TotalYesVotes: 0}
-	metaDataJSON, err := json.Marshal(metaData) //golang JSON (byte array)
+	numOptions, err := strconv.Atoi(args[2+numDistricts])
 	if err != nil {
-		return nil, errors.New("Marshalling for metadata struct has failed")
+		return nil, err
 	}
-	err = stub.PutState("metadata", metaDataJSON) //writes the key-value pair ("metadata", json object)
-	if err != nil {
-		return nil, errors.New("put state of meta data has failed")
+
+	//get voting options
+	i := 0
+	var options = make([]string, numOptions)
+	for i < numOptions {
+		options[i] = args[i+3+numDistricts]
+		i++
 	}
 
 	//create data model for districts
-	i := 0
+	i = 0
+	var districts = make([]string, numDistricts)
+
 	for i < numDistricts {
-		districtData := &districtReferendum{DistrictName: args[i+2], NoVotes: 0, YesVotes: 0, Votes: make(map[string]string)} //golang struct
-		districtDataJSON, err := json.Marshal(districtData)                                                                   //golang JSON (byte array)
+		districts[i] = args[i+2]
+		districtData := &districtReferendum{DistrictName: districts[i], NoVotes: 0, YesVotes: 0, Votes: make(map[string]string)} //golang struct
+		districtDataJSON, err := json.Marshal(districtData)                                                                      //golang JSON (byte array)
 		if err != nil {
 			return nil, errors.New("Marshalling for district struct has failed")
 		}
@@ -83,6 +91,17 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string
 			return nil, errors.New("put state of district data has failed")
 		}
 		i++
+	}
+
+	//create metadata model
+	metaData := &referendumMetaData{ReferendumName: args[0], NumberOfDistricts: numDistricts, TotalNoVotes: 0, TotalYesVotes: 0, VoteOptions: options, Districts: districts}
+	metaDataJSON, err := json.Marshal(metaData) //golang JSON (byte array)
+	if err != nil {
+		return nil, errors.New("Marshalling for metadata struct has failed")
+	}
+	err = stub.PutState("metadata", metaDataJSON) //writes the key-value pair ("metadata", json object)
+	if err != nil {
+		return nil, errors.New("put state of meta data has failed")
 	}
 
 	return nil, nil
@@ -99,8 +118,10 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function stri
 		return t.write(stub, args)
 	} else if function == "error" {
 		return t.error(stub, args)
-	} else if function == "register" {
-		return t.registerToVote(stub, args)
+	} else if function == "authorize" {
+		return t.authorize(stub, args)
+	} else if function == "requestToVote" {
+		return t.requestToVote(stub, args)
 	}
 
 	fmt.Println("invoke did not find func: " + function) //error
@@ -115,12 +136,12 @@ func (t *SimpleChaincode) error(stub shim.ChaincodeStubInterface, args []string)
 	return nil, nil
 }
 
-func (t *SimpleChaincode) registerToVote(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN/REGISTRAR!!
+func (t *SimpleChaincode) authorize(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN/REGISTRAR!!
 	var name string          //name of person who is being allowed to vote
 	var allowedToVote string //yes or no
 	var registrar string     //who is registering this user
 
-	if len(args) != 3 {
+	if len(args) != 3 { //IN NODE!
 		return nil, errors.New("Incorrect number of arguments. Expecting 3. ID of the person who is being registered to vote,  yes or no, and name of registrar")
 	}
 	name = args[0]
@@ -128,20 +149,23 @@ func (t *SimpleChaincode) registerToVote(stub shim.ChaincodeStubInterface, args 
 	registrar = args[2]
 
 	//check allowedToVote value
-	if strings.TrimRight(allowedToVote, "\n") != "yes" && strings.TrimRight(allowedToVote, "\n") == "no" {
+	if strings.TrimRight(allowedToVote, "\n") != "yes" && strings.TrimRight(allowedToVote, "\n") != "no" { //IN NODE!
 		return nil, errors.New("allowed to vote val needs to be a yes or no")
+	}
+	if strings.TrimRight(allowedToVote, "\n") == "no" { //IN NODE!
+		return nil, errors.New("not allowed to overwrite allowedToVote with no, since it is the default")
 	}
 
 	//check if this user already has a record
-	preExistRecord, err := stub.GetState(name) //gets value for the given key
+	preExistRecord, err := stub.GetState(name) //gets value for the given key //IN NODE!
 	if err != nil {                            //error with retrieval
 		return nil, err
 	}
-	if preExistRecord != nil { //user already has a record
-		return nil, errors.New(name + "has alredy been registered")
+	if preExistRecord == nil { //user already has a record
+		return nil, errors.New(name + "hasn't yet requested to be eligible to vote registered")
 	}
 	//user record to be recorded
-	voterRecord := &voterState{CanVote: allowedToVote, HasVoted: "no", RegisteredBy: registrar}
+	voterRecord := &voterState{Authorized: allowedToVote, HasVoted: "no", RegisteredBy: registrar}
 	voterRecordJSON, err := json.Marshal(voterRecord) //golang JSON (byte array)
 	if err != nil {
 		return nil, errors.New("Marshalling for voterRecord struct has failed")
@@ -152,7 +176,37 @@ func (t *SimpleChaincode) registerToVote(stub shim.ChaincodeStubInterface, args 
 	}
 
 	return nil, nil
+}
 
+func (t *SimpleChaincode) requestToVote(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	var name string      //name of person who is being allowed to vote
+	var registrar string //who is registering this user
+
+	if len(args) != 2 { //IN NODE!
+		return nil, errors.New("Incorrect number of arguments. Expecting 3. ID of the person who is being registered to vote,  yes or no, and name of registrar")
+	}
+	name = args[0]
+	registrar = args[1]
+
+	//check if this user already has a record
+	preExistRecord, err := stub.GetState(name) //gets value for the given key //IN NODE!
+	if err != nil {                            //error with retrieval
+		return nil, err
+	}
+	if preExistRecord != nil { //user already has a record
+		return nil, errors.New(name + "has alredy been registered")
+	}
+	//user record to be recorded
+	voterRecord := &voterState{Authorized: "no", HasVoted: "no", RegisteredBy: registrar}
+	voterRecordJSON, err := json.Marshal(voterRecord) //golang JSON (byte array)
+	if err != nil {
+		return nil, errors.New("Marshalling for voterRecord struct has failed")
+	}
+	err = stub.PutState(name, voterRecordJSON) //writes the key-value pair ("metadata", json object)
+	if err != nil {
+		return nil, errors.New("put state of voterRecord has failed")
+	}
+	return nil, nil
 }
 
 func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
@@ -163,7 +217,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 
 	var err error
 
-	if len(args) != 3 {
+	if len(args) != 3 { //IN NODE!
 		return nil, errors.New("Incorrect number of arguments. Expecting 2. ID of the person, district to vote in, and value to set")
 	}
 
@@ -172,7 +226,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	value = args[2]
 
 	//check if given district exists
-	votingDistrictRaw, err := stub.GetState(district)
+	votingDistrictRaw, err := stub.GetState(district) //IN NODE!
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +266,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	if strings.TrimRight(userData.HasVoted, "\n") == "yes" {
 		return nil, errors.New("vote already exists")
 	}
-	if strings.TrimRight(userData.CanVote, "\n") == "no" {
+	if strings.TrimRight(userData.Authorized, "\n") == "no" {
 		return nil, errors.New(name + "is not allowed to vote")
 	}
 
@@ -221,7 +275,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	if strings.TrimRight(value, "\n") == "yes" {
 		votingDistrictToUpdate.YesVotes++
 
-	} else if strings.TrimRight(value, "\n") == "no" {
+	} else if strings.TrimRight(value, "\n") == "no" { //IN NODE!
 		votingDistrictToUpdate.NoVotes++
 	} else {
 		return nil, errors.New("vote needs to be a yes or no")
@@ -302,9 +356,8 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 	}
 
 	if valAsbytes == nil { //vote doesn't exist
-		jsonResp = "{\"Error\":\"Failed to get vote for " + name + "\"}"
+		jsonResp = "{\"Error\":\"No data exists for " + name + "\"}"
 		return nil, errors.New(jsonResp)
 	}
-
 	return valAsbytes, nil
 }
