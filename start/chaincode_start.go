@@ -15,17 +15,19 @@ import (
 type referendumMetaData struct {
 	ReferendumName    string
 	NumberOfDistricts int
-	TotalNoVotes      int
-	TotalYesVotes     int
-	VoteOptions       []string
-	Districts         []string
+	//TotalNoVotes      int
+	//TotalYesVotes     int
+	TotalVotes  map[string]int
+	VoteOptions []string
+	Districts   []string
 }
 
 type districtReferendum struct {
 	DistrictName string
-	NoVotes      int
-	YesVotes     int
-	Votes        map[string]string //maps vote ID to vote
+	//NoVotes      int
+	//YesVotes     int
+	TotalVotes map[string]int
+	Votes      map[string]string //maps vote ID to vote
 }
 
 type voterState struct {
@@ -66,22 +68,25 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string
 		return nil, err
 	}
 
-	//get voting options
+	//create vote options object, used in both district and metadata
 	i := 0
-	var options = make([]string, numOptions)
+	var options = make([]string, numOptions) //slice (array) containing option names
+	var voteOptions = make(map[string]int)   //(key, value) pairs of options to number of votes that each option has gotten
 	for i < numOptions {
 		options[i] = args[i+3+numDistricts]
+		voteOptions[options[i]] = 0 //initialize each option has having 0 votes
 		i++
 	}
 
 	//create data model for districts
 	i = 0
 	var districts = make([]string, numDistricts)
-
+	//voteOptions[]
 	for i < numDistricts {
 		districts[i] = args[i+2]
-		districtData := &districtReferendum{DistrictName: districts[i], NoVotes: 0, YesVotes: 0, Votes: make(map[string]string)} //golang struct
-		districtDataJSON, err := json.Marshal(districtData)                                                                      //golang JSON (byte array)
+
+		districtData := &districtReferendum{DistrictName: districts[i], Votes: make(map[string]string), TotalVotes: voteOptions} //golang struct
+		districtDataJSON, err := json.Marshal(districtData)
 		if err != nil {
 			return nil, errors.New("Marshalling for district struct has failed")
 		}
@@ -94,7 +99,7 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string
 	}
 
 	//create metadata model
-	metaData := &referendumMetaData{ReferendumName: args[0], NumberOfDistricts: numDistricts, TotalNoVotes: 0, TotalYesVotes: 0, VoteOptions: options, Districts: districts}
+	metaData := &referendumMetaData{ReferendumName: args[0], NumberOfDistricts: numDistricts, VoteOptions: options, Districts: districts, TotalVotes: voteOptions}
 	metaDataJSON, err := json.Marshal(metaData) //golang JSON (byte array)
 	if err != nil {
 		return nil, errors.New("Marshalling for metadata struct has failed")
@@ -270,13 +275,8 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 		return nil, errors.New(name + "is not allowed to vote")
 	}
 
-	//if person has not already voted, update district data
-	votingDistrictToUpdate.Votes[name] = value
-	if strings.TrimRight(value, "\n") == "yes" {
-		votingDistrictToUpdate.YesVotes++
-
-	} else if strings.TrimRight(value, "\n") == "no" { //IN NODE!
-		votingDistrictToUpdate.NoVotes++
+	if validVote(strings.TrimRight(value, "\n"), metaDataStructToUpdate.VoteOptions) { //checks if the vote value is inside the allowable votes
+		votingDistrictToUpdate.TotalVotes[strings.TrimRight(value, "\n")]++ //adds a vote
 	} else {
 		return nil, errors.New("vote needs to be a yes or no")
 	}
@@ -291,12 +291,7 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 	}
 
 	//update metadata too
-	if strings.TrimRight(value, "\n") == "yes" {
-		metaDataStructToUpdate.TotalYesVotes++
-
-	} else if strings.TrimRight(value, "\n") == "no" {
-		metaDataStructToUpdate.TotalNoVotes++
-	}
+	metaDataStructToUpdate.TotalVotes[strings.TrimRight(value, "\n")]++ //adds a vote
 
 	electionMetaDataJSON, err := json.Marshal(metaDataStructToUpdate) //golang JSON (byte array)
 	if err != nil {                                                   //marshall error
@@ -360,4 +355,13 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 		return nil, errors.New(jsonResp)
 	}
 	return valAsbytes, nil
+}
+
+func validVote(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
 }
