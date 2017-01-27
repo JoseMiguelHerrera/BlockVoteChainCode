@@ -281,6 +281,8 @@ func (t *SimpleChaincode) write(stub shim.ChaincodeStubInterface, args []string)
 		return nil, errors.New("vote needs to be a yes or no")
 	}
 
+	votingDistrictToUpdate.Votes[name] = value
+
 	NewDistrictDataJSON, err := json.Marshal(votingDistrictToUpdate) //golang JSON (byte array)
 	if err != nil {                                                  //marshall error
 		return nil, err
