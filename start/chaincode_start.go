@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
@@ -15,25 +16,24 @@ import (
 type referendumMetaData struct {
 	ReferendumName    string
 	NumberOfDistricts int
-	//TotalNoVotes      int
-	//TotalYesVotes     int
-	TotalVotes  map[string]int
-	VoteOptions []string
-	Districts   []string
+	TotalVotes        map[string]int
+	VoteOptions       []string
+	Districts         []string
 }
 
 type districtReferendum struct {
 	DistrictName string
-	//NoVotes      int
-	//YesVotes     int
-	TotalVotes map[string]int
-	Votes      map[string]string //maps vote ID to vote
+	TotalVotes   map[string]int
+	Votes        map[string]string //maps vote ID to vote
 }
 
-type voterState struct {
+type voterState struct { //key: government ID
+	Name         string
+	BlindedToken string //hopefully this can be encoded as a string
 	Authorized   string
 	HasVoted     string
 	RegisteredBy string
+	DateOfBirth  time.Time
 }
 
 // SimpleChaincode example simple Chaincode implementation
@@ -47,6 +47,7 @@ func main() { //main function executes when each peer deploys its instance of th
 	err := shim.Start(new(SimpleChaincode))
 	if err != nil {
 		fmt.Printf("Error starting Simple chaincode: %s", err)
+
 	}
 }
 
@@ -123,9 +124,9 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function stri
 		return t.write(stub, args)
 	} else if function == "error" {
 		return t.error(stub, args)
-	} else if function == "authorize" {
-		return t.authorize(stub, args)
-	} else if function == "requestToVote" {
+	} else if function == "register" {
+		return t.register(stub, args)
+	} else if function == "requestToVote" { //deprecated!!!
 		return t.requestToVote(stub, args)
 	}
 
@@ -141,17 +142,29 @@ func (t *SimpleChaincode) error(stub shim.ChaincodeStubInterface, args []string)
 	return nil, nil
 }
 
-func (t *SimpleChaincode) authorize(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN/REGISTRAR!!
+func (t *SimpleChaincode) register(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN/REGISTRAR!!
+	var govID string
+	var blindedToken string
 	var name string          //name of person who is being allowed to vote
 	var allowedToVote string //yes or no
 	var registrar string     //who is registering this user
+	var yearOfBirth int
+	var monthOfBirth int
+	var dayOfBirth int
 
-	if len(args) != 3 { //IN NODE!
-		return nil, errors.New("Incorrect number of arguments. Expecting 3. ID of the person who is being registered to vote,  yes or no, and name of registrar")
+	if len(args) != 8 { //IN NODE!
+		return nil, errors.New("Incorrect number of arguments. Expecting 8. name of the person who is being registered to vote, their govID,their blinded token,yes or no,  name of registrar, year, month and day of birth, and postal code")
 	}
-	name = args[0]
-	allowedToVote = args[1]
-	registrar = args[2]
+	govID = args[0]
+	blindedToken = args[1]
+	name = args[2]
+	allowedToVote = args[3]
+	registrar = args[4]
+	yearOfBirth, _ = strconv.Atoi(args[5])
+	monthOfBirth, _ = strconv.Atoi(args[6])
+	dayOfBirth, _ = strconv.Atoi(args[7])
+
+	dob := time.Date(yearOfBirth, time.Month(monthOfBirth), dayOfBirth, 23, 0, 0, 0, time.UTC)
 
 	//check allowedToVote value
 	if strings.TrimRight(allowedToVote, "\n") != "yes" && strings.TrimRight(allowedToVote, "\n") != "no" { //IN NODE!
@@ -162,15 +175,16 @@ func (t *SimpleChaincode) authorize(stub shim.ChaincodeStubInterface, args []str
 	}
 
 	//check if this user already has a record
-	preExistRecord, err := stub.GetState(name) //gets value for the given key //IN NODE!
-	if err != nil {                            //error with retrieval
+	preExistRecord, err := stub.GetState(govID) //gets value for the given key //IN NODE!
+	if err != nil {                             //error with retrieval
 		return nil, err
 	}
-	if preExistRecord == nil { //user already has a record
-		return nil, errors.New(name + "hasn't yet requested to be eligible to vote registered")
+	if preExistRecord != nil { //user already has a record
+		return nil, errors.New("person with the given ID=" + govID + " already exists on the system")
 	}
+
 	//user record to be recorded
-	voterRecord := &voterState{Authorized: allowedToVote, HasVoted: "no", RegisteredBy: registrar}
+	voterRecord := &voterState{Authorized: allowedToVote, HasVoted: "no", RegisteredBy: registrar, DateOfBirth: dob, Name: name, BlindedToken: blindedToken}
 	voterRecordJSON, err := json.Marshal(voterRecord) //golang JSON (byte array)
 	if err != nil {
 		return nil, errors.New("Marshalling for voterRecord struct has failed")
@@ -184,14 +198,23 @@ func (t *SimpleChaincode) authorize(stub shim.ChaincodeStubInterface, args []str
 }
 
 func (t *SimpleChaincode) requestToVote(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	//THIS FUNCTION IS NO LONGER USED, WILL BE DELETED SOON
 	var name string      //name of person who is being allowed to vote
 	var registrar string //who is registering this user
+	var yearOfBirth int
+	var monthOfBirth int
+	var dayOfBirth int
 
-	if len(args) != 2 { //IN NODE!
-		return nil, errors.New("Incorrect number of arguments. Expecting 3. ID of the person who is being registered to vote,  yes or no, and name of registrar")
+	if len(args) != 6 { //IN NODE!
+		return nil, errors.New("Incorrect number of arguments. Expecting 5. ID of the person who is being registered to vote,  yes or no,  name of registrar, year, month and day of birth, and postal code")
 	}
 	name = args[0]
 	registrar = args[1]
+	yearOfBirth, _ = strconv.Atoi(args[2])
+	monthOfBirth, _ = strconv.Atoi(args[3])
+	dayOfBirth, _ = strconv.Atoi(args[4])
+
+	dob := time.Date(yearOfBirth, time.Month(monthOfBirth), dayOfBirth, 23, 0, 0, 0, time.UTC)
 
 	//check if this user already has a record
 	preExistRecord, err := stub.GetState(name) //gets value for the given key //IN NODE!
@@ -202,7 +225,7 @@ func (t *SimpleChaincode) requestToVote(stub shim.ChaincodeStubInterface, args [
 		return nil, errors.New(name + "has alredy been registered")
 	}
 	//user record to be recorded
-	voterRecord := &voterState{Authorized: "no", HasVoted: "no", RegisteredBy: registrar}
+	voterRecord := &voterState{Authorized: "no", HasVoted: "no", RegisteredBy: registrar, DateOfBirth: dob}
 	voterRecordJSON, err := json.Marshal(voterRecord) //golang JSON (byte array)
 	if err != nil {
 		return nil, errors.New("Marshalling for voterRecord struct has failed")
