@@ -189,7 +189,7 @@ func (t *SimpleChaincode) register(stub shim.ChaincodeStubInterface, args []stri
 	if err != nil {
 		return nil, errors.New("Marshalling for voterRecord struct has failed")
 	}
-	err = stub.PutState(name, voterRecordJSON) //writes the key-value pair ("metadata", json object)
+	err = stub.PutState(govID, voterRecordJSON) //writes the key-value pair ("metadata", json object)
 	if err != nil {
 		return nil, errors.New("put state of voterRecord has failed")
 	}
