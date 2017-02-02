@@ -148,17 +148,20 @@ func (t *SimpleChaincode) error(stub shim.ChaincodeStubInterface, args []string)
 }
 
 func (t *SimpleChaincode) addRegistrar(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN/REGISTRAR!!
-
-	var registrarPublicKey string
 	var registrarName string //who is registering this user
+	var registrarPublicKey string
+
+	registrarName = args[0]
+	registrarPublicKey = args[1]
+
 	registrarDB := &registrarsInfo{}
 
-	if len(args) != 2 { //IN NODE!
+	if len(args) != 2 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 2- the registrar's name and public key")
 	}
 
 	//get registrarInfo
-	registrarInfoRaw, err := stub.GetState("registarInfo") //gets value for the given key //IN NODE!
+	registrarInfoRaw, err := stub.GetState("registarInfo") //gets value for the given key
 	if err != nil {                                        //error with retrieval
 		return nil, err
 	}
