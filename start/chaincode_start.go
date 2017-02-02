@@ -28,15 +28,17 @@ type districtReferendum struct {
 }
 
 type voterState struct { //key: government ID
-	Name         string
-	BlindedToken string //hopefully this can be encoded as a string
-	RegisteredBy string //this will be a cryptographic feild
-	DateOfBirth  time.Time
+	RegisteredBy string    //this will be a cryptographic feild
+	DateOfBirth  time.Time //get rid of it, too personal
 }
 
 type voteRec struct { //key: signed token
 	Vote     string
 	District string
+}
+
+type registrarsInfo struct {
+	PublicKeys map[string]string //maps a registrar's name to thier public key
 }
 
 // SimpleChaincode example simple Chaincode implementation
@@ -129,6 +131,8 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function stri
 		return t.error(stub, args)
 	} else if function == "register" {
 		return t.register(stub, args)
+	} else if function == "writeRegistar" {
+		return t.addRegistrar(stub, args)
 	}
 
 	fmt.Println("invoke did not find func: " + function) //error
@@ -143,25 +147,58 @@ func (t *SimpleChaincode) error(stub shim.ChaincodeStubInterface, args []string)
 	return nil, nil
 }
 
+func (t *SimpleChaincode) addRegistrar(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN/REGISTRAR!!
+
+	var registrarPublicKey string
+	var registrarName string //who is registering this user
+	registrarDB := &registrarsInfo{}
+
+	if len(args) != 2 { //IN NODE!
+		return nil, errors.New("Incorrect number of arguments. Expecting 2- the registrar's name and public key")
+	}
+
+	//get registrarInfo
+	registrarInfoRaw, err := stub.GetState("registarInfo") //gets value for the given key //IN NODE!
+	if err != nil {                                        //error with retrieval
+		return nil, err
+	}
+	if registrarInfoRaw == nil { //no registrar info yet, ready to write the first one
+
+		registrarDB = &registrarsInfo{PublicKeys: make(map[string]string)}
+
+	} else {
+		//not the first registrar
+		err = json.Unmarshal(registrarInfoRaw, &registrarDB)
+		if err != nil { //unmarshalling error
+			return nil, err
+		}
+	}
+
+	registrarDB.PublicKeys[registrarName] = registrarPublicKey //adding the requested registrar
+	//write back
+	registrarDBJSON, err := json.Marshal(registrarDB) //golang JSON (byte array)
+	if err != nil {
+		return nil, errors.New("Marshalling for registrarDB struct has failed")
+	}
+	err = stub.PutState("registarInfo", registrarDBJSON)
+	return nil, nil
+}
+
 func (t *SimpleChaincode) register(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN/REGISTRAR!!
 	var govID string
-	var blindedToken string
-	var name string      //name of person who is being allowed to vote
 	var registrar string //who is registering this user
 	var yearOfBirth int
 	var monthOfBirth int
 	var dayOfBirth int
 
-	if len(args) != 8 { //IN NODE!
-		return nil, errors.New("Incorrect number of arguments. Expecting 8. name of the person who is being registered to vote, their govID,their blinded token,yes or no,  name of registrar, year, month and day of birth, and postal code")
+	if len(args) != 5 { //IN NODE!
+		return nil, errors.New("Incorrect number of arguments. Expecting 5")
 	}
 	govID = args[0]
-	blindedToken = args[1]
-	name = args[2]
-	registrar = args[4]
-	yearOfBirth, _ = strconv.Atoi(args[5])
-	monthOfBirth, _ = strconv.Atoi(args[6])
-	dayOfBirth, _ = strconv.Atoi(args[7])
+	registrar = args[1]
+	yearOfBirth, _ = strconv.Atoi(args[2])
+	monthOfBirth, _ = strconv.Atoi(args[3])
+	dayOfBirth, _ = strconv.Atoi(args[4])
 
 	dob := time.Date(yearOfBirth, time.Month(monthOfBirth), dayOfBirth, 23, 0, 0, 0, time.UTC)
 
@@ -175,7 +212,7 @@ func (t *SimpleChaincode) register(stub shim.ChaincodeStubInterface, args []stri
 	}
 
 	//user record to be recorded
-	voterRecord := &voterState{RegisteredBy: registrar, DateOfBirth: dob, Name: name, BlindedToken: blindedToken}
+	voterRecord := &voterState{RegisteredBy: registrar, DateOfBirth: dob}
 	voterRecordJSON, err := json.Marshal(voterRecord) //golang JSON (byte array)
 	if err != nil {
 		return nil, errors.New("Marshalling for voterRecord struct has failed")
