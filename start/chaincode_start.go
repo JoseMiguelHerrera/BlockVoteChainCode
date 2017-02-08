@@ -50,7 +50,7 @@ type registrarsInfo struct {
 
 type registrarInfo struct {
 	KeyModulus           string
-	keyExponent          string
+	KeyExponent          string
 	RegistrationDistrict string
 }
 
@@ -204,7 +204,7 @@ func (t *SimpleChaincode) addRegistrar(stub shim.ChaincodeStubInterface, args []
 		}
 	}
 
-	if registrarDB[registrarName].keyExponent != "" { //this registrar already exists
+	if registrarDB[registrarName].KeyModulus != "" { //this registrar already exists
 		return nil, errors.New("this registrar is already entered")
 	}
 
@@ -217,7 +217,7 @@ func (t *SimpleChaincode) addRegistrar(stub shim.ChaincodeStubInterface, args []
 		return nil, errors.New("given district " + registrarDistrict + " doesn't exist")
 	}
 
-	registrarDB[registrarName] = registrarInfo{KeyModulus: registrarKeyModulus, keyExponent: registrarKeyExponent, RegistrationDistrict: registrarDistrict}
+	registrarDB[registrarName] = registrarInfo{KeyModulus: registrarKeyModulus, KeyExponent: registrarKeyExponent, RegistrationDistrict: registrarDistrict}
 	//write back
 	registrarDBJSON, err := json.Marshal(registrarDB) //golang JSON (byte array)
 	if err != nil {
