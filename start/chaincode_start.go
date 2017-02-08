@@ -3,9 +3,16 @@
 package main
 
 import (
+	"bytes"
+	"crypto"
+	"crypto/rsa"
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +46,12 @@ type voteRec struct { //key: signed token
 
 type registrarsInfo struct {
 	PublicKeys map[string]string //maps a registrar's name to thier public key
+}
+
+type registrarInfo struct {
+	KeyModulus           string
+	keyExponent          string
+	RegistrationDistrict string
 }
 
 // SimpleChaincode example simple Chaincode implementation
@@ -147,28 +160,44 @@ func (t *SimpleChaincode) error(stub shim.ChaincodeStubInterface, args []string)
 	return nil, nil
 }
 
-func (t *SimpleChaincode) addRegistrar(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN/REGISTRAR!!
-	var registrarName string //who is registering this user
-	var registrarPublicKey string
+func (t *SimpleChaincode) addRegistrar(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) { //BY USE ONLY BY ADMIN!!!
+	var registrarName string
+	var registrarKeyModulus string
+	var registrarKeyExponent string
+	var registrarDistrict string
+
+	if len(args) != 4 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 2- the registrar's name and key mod, key exp, and district")
+	}
 
 	registrarName = args[0]
-	registrarPublicKey = args[1]
+	registrarKeyModulus = args[1]
+	registrarKeyExponent = args[2]
+	registrarDistrict = args[3]
 
-	registrarDB := &registrarsInfo{}
-
-	if len(args) != 2 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 2- the registrar's name and public key")
+	//check if encoding is correct on crypto
+	decE, err := base64.StdEncoding.DecodeString(registrarKeyExponent)
+	if err != nil {
+		return nil, err //registrarKeyExponent not encoded properly
 	}
+	if decE == nil {
+	}
+	decN, err := base64.StdEncoding.DecodeString(registrarKeyModulus)
+	if err != nil {
+		return nil, err //registrarKeyModulus not encoded properly
+	}
+	if decN == nil {
+	}
+
+	registrarDB := make(map[string]registrarInfo)
 
 	//get registrarInfo
 	registrarInfoRaw, err := stub.GetState("registarInfo") //gets value for the given key
 	if err != nil {                                        //error with retrieval
 		return nil, err
 	}
-	if registrarInfoRaw == nil { //no registrar info yet, ready to write the first one
-
-		registrarDB = &registrarsInfo{PublicKeys: make(map[string]string)}
-
+	if registrarInfoRaw == nil {
+		//no registrar info yet, ready to write the first one
 	} else {
 		//not the first registrar
 		err = json.Unmarshal(registrarInfoRaw, &registrarDB)
@@ -177,11 +206,11 @@ func (t *SimpleChaincode) addRegistrar(stub shim.ChaincodeStubInterface, args []
 		}
 	}
 
-	registrarDB.PublicKeys[registrarName] = registrarPublicKey //adding the requested registrar
+	registrarDB[registrarName] = registrarInfo{KeyModulus: registrarKeyModulus, keyExponent: registrarKeyExponent, RegistrationDistrict: registrarDistrict}
 	//write back
 	registrarDBJSON, err := json.Marshal(registrarDB) //golang JSON (byte array)
 	if err != nil {
-		return nil, errors.New("Marshalling for registrarDB struct has failed")
+		return nil, errors.New("Marshalling for registrarDB  has failed")
 	}
 	err = stub.PutState("registarInfo", registrarDBJSON)
 	return nil, nil
@@ -435,4 +464,64 @@ func validVote(a string, list []string) bool {
 		}
 	}
 	return false
+}
+
+func isCryptoVerified(keyModulus string, keyExponent string, tokenID string, tokenSignature string) (bool, error) {
+
+	//required to import the sha1 package
+	hash := sha1.New()
+	hello := hash.BlockSize
+	fmt.Printf("%d\n", hello)
+
+	//Make key object
+	decN, err := base64.StdEncoding.DecodeString(keyModulus)
+	if err != nil {
+		return false, err
+	}
+	n := big.NewInt(0)
+	n.SetBytes(decN)
+
+	decE, err := base64.StdEncoding.DecodeString(keyExponent)
+	if err != nil {
+		return false, err
+	}
+	var eBytes []byte
+	if len(decE) < 8 {
+		eBytes = make([]byte, 8-len(decE), 8)
+		eBytes = append(eBytes, decE...)
+	} else {
+		eBytes = decE
+	}
+	eReader := bytes.NewReader(eBytes)
+	var e uint64
+	err = binary.Read(eReader, binary.BigEndian, &e)
+	if err != nil {
+		return false, err
+	}
+	pKey := rsa.PublicKey{N: n, E: int(e)}
+
+	//make the id and sig object
+	id, err := base64.StdEncoding.DecodeString(tokenID) //ID of blinded token
+	if err != nil {
+		return false, err //illegal base64 data
+	}
+
+	sig, err := base64.StdEncoding.DecodeString(tokenSignature) //signature of blinded token
+	if err != nil {
+		return false, err //illegal base64 data
+	}
+
+	//hash the id
+	newhash := crypto.SHA1
+	pssh := newhash.New()
+	pssh.Write(id)
+	hashed := pssh.Sum(nil)
+
+	//verify the signature
+	opts := rsa.PSSOptions{SaltLength: 20, Hash: crypto.SHA1}
+	if err = rsa.VerifyPSS(&pKey, newhash, hashed, sig, &opts); err != nil {
+		return false, err //verification error
+	}
+	return true, nil //VERIFIED!
+
 }
