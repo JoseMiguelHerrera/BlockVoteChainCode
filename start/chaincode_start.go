@@ -196,14 +196,25 @@ func (t *SimpleChaincode) addRegistrar(stub shim.ChaincodeStubInterface, args []
 	if err != nil {                                        //error with retrieval
 		return nil, err
 	}
-	if registrarInfoRaw == nil {
-		//no registrar info yet, ready to write the first one
-	} else {
+	if registrarInfoRaw != nil {
 		//not the first registrar
 		err = json.Unmarshal(registrarInfoRaw, &registrarDB)
 		if err != nil { //unmarshalling error
 			return nil, err
 		}
+	}
+
+	if registrarDB[registrarName].keyExponent != "" { //this registrar already exists
+		return nil, errors.New("this registrar is already entered")
+	}
+
+	//check if given district exists
+	votingDistrictRaw, err := stub.GetState(registrarDistrict) //IN NODE!
+	if err != nil {
+		return nil, err
+	}
+	if votingDistrictRaw == nil { //district doesn't exist
+		return nil, errors.New("given district " + registrarDistrict + " doesn't exist")
 	}
 
 	registrarDB[registrarName] = registrarInfo{KeyModulus: registrarKeyModulus, keyExponent: registrarKeyExponent, RegistrationDistrict: registrarDistrict}
