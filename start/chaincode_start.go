@@ -309,31 +309,23 @@ func (t *SimpleChaincode) requestToVote(stub shim.ChaincodeStubInterface, args [
 }
 */
 func (t *SimpleChaincode) writeVote(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	//args: 0: signed token of person voting, 1: gov ID of person voting, 2: district where voting, 3: value of vote
-	//var govID string
-	var signedToken string
-	var district string
+	//args: 0: signed token id of person voting, 1:signed token signature, 2: value of vote
+	var signedTokenID string
+	var signedTokenSig string
 	var value string
+	var registrarName string
 
 	var err error
 
-	if len(args) != 3 { //IN NODE!
-		return nil, errors.New("Incorrect number of arguments. Expecting 3. signed token of the person, district to vote in, and value to set")
+	if len(args) != 4 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 3. signed token id of the person, signed token id, name of registrar, and vote value to set")
 	}
 
-	signedToken = args[0]
-	//govID = args[1]
-	district = args[1]
+	signedTokenID = args[0]
+	signedTokenSig = args[1]
 	value = args[2]
+	registrarName = args[3]
 
-	//check if given district exists
-	votingDistrictRaw, err := stub.GetState(district) //IN NODE!
-	if err != nil {
-		return nil, err
-	}
-	if votingDistrictRaw == nil { //district doesn't exist
-		return nil, errors.New("given district " + district + " doesn't exist")
-	}
 	//get metadata aka global results
 	metadataRaw, err := stub.GetState("metadata")
 	if err != nil { //get state error
@@ -344,6 +336,33 @@ func (t *SimpleChaincode) writeVote(stub shim.ChaincodeStubInterface, args []str
 	if err != nil { //unmarshalling error
 		return nil, err
 	}
+
+	//get registrar data
+	registrarInfoRaw, err := stub.GetState("registarInfo")
+	if err != nil {
+		return nil, err
+	}
+	if registrarInfoRaw == nil { //no registrars added yet
+		return nil, errors.New("no registrars have been added yet")
+	}
+
+	registrarDB := make(map[string]registrarInfo)
+	err = json.Unmarshal(registrarInfoRaw, &registrarDB)
+	if err != nil { //unmarshalling error
+		return nil, err
+	}
+
+	//check if registrar exists
+	if registrarDB[registrarName].KeyModulus == "" {
+		return nil, errors.New("registrar " + registrarName + " doesn't exist")
+	}
+
+	//check if given district exists
+	votingDistrictRaw, err := stub.GetState(registrarDB[registrarName].RegistrationDistrict) //IN NODE!
+	if err != nil {
+		return nil, err
+	}
+
 	//get district
 	var votingDistrictToUpdate districtReferendum
 	err = json.Unmarshal(votingDistrictRaw, &votingDistrictToUpdate)
@@ -352,12 +371,12 @@ func (t *SimpleChaincode) writeVote(stub shim.ChaincodeStubInterface, args []str
 	}
 
 	//check if this user has already voted
-	preVoteRaw, err := stub.GetState(signedToken)
+	preVoteRaw, err := stub.GetState(signedTokenID + signedTokenSig)
 	if err != nil { //error
 		return nil, err
 	}
 	if preVoteRaw != nil { //user has already voted
-		return nil, errors.New("user with signedToken " + signedToken + "has already voted")
+		return nil, errors.New("user with signedToken " + signedTokenID + signedTokenSig + " has already voted")
 	}
 
 	/*		REPLACE WIH CRYPTO SOLUTION 	//check if user is registered, and get reg data
@@ -382,20 +401,25 @@ func (t *SimpleChaincode) writeVote(stub shim.ChaincodeStubInterface, args []str
 	}
 	*/
 
+	verified, err := isCryptoVerified(registrarDB[registrarName].KeyModulus, registrarDB[registrarName].KeyExponent, signedTokenID, signedTokenSig)
+	if !verified {
+		return nil, err
+	}
+
 	//tally vote in district
 	if validVote(strings.TrimRight(value, "\n"), metaDataStructToUpdate.VoteOptions) { //checks if the vote value is inside the allowable votes
 		votingDistrictToUpdate.TotalVotes[strings.TrimRight(value, "\n")]++ //adds a vote
 	} else {
 		return nil, errors.New("Invalid vote!")
 	}
-	votingDistrictToUpdate.Votes[signedToken] = value
+	votingDistrictToUpdate.Votes[signedTokenID+signedTokenSig] = value
 
 	//update district
 	NewDistrictDataJSON, err := json.Marshal(votingDistrictToUpdate) //golang JSON (byte array)
 	if err != nil {                                                  //marshall error
 		return nil, err
 	}
-	err = stub.PutState(district, NewDistrictDataJSON)
+	err = stub.PutState(registrarDB[registrarName].RegistrationDistrict, NewDistrictDataJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -413,14 +437,14 @@ func (t *SimpleChaincode) writeVote(stub shim.ChaincodeStubInterface, args []str
 	}
 
 	//write signed token of voter at global level to easily detect if someone has already voted in ANY district
-	globalVote := &voteRec{Vote: value, District: district}
+	globalVote := &voteRec{Vote: value, District: registrarDB[registrarName].RegistrationDistrict}
 
 	globalVoteJSON, err := json.Marshal(globalVote) //golang JSON (byte array)
 	if err != nil {                                 //marshall error
 		return nil, err
 	}
 
-	err = stub.PutState(signedToken, globalVoteJSON)
+	err = stub.PutState(signedTokenID+signedTokenSig, globalVoteJSON)
 	if err != nil {
 		return nil, err
 	}
