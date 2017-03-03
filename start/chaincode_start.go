@@ -556,25 +556,44 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 	if len(args) != 1 {
 		return nil, errors.New("Incorrect number of arguments. Expecting name of the var to query")
 	}
+	/*
+		//get metadata aka global results
+		metadataRaw, err := stub.GetState("metadata")
+		if err != nil { //get state error
+			return nil, err
+		}
+		var metaDataStruct referendumMetaData
+		err = json.Unmarshal(metadataRaw, &metaDataStruct)
+		if err != nil { //unmarshalling error
+			return nil, err
+		}
 
-	//get metadata aka global results
-	metadataRaw, err := stub.GetState("metadata")
-	if err != nil { //get state error
-		return nil, err
-	}
-	var metaDataStruct referendumMetaData
-	err = json.Unmarshal(metadataRaw, &metaDataStruct)
-	if err != nil { //unmarshalling error
-		return nil, err
-	}
+		//check that this election is currently running
+			if inTimeSpan(metaDataStruct.StartTime, metaDataStruct.EndTime, time.Now().UTC()) {
+				//election open
+				if stringInArray(name, metaDataStruct.Districts) || name == "metadata" { //requesting results
+					if metaDataStruct.AllowLiveResults == "no" {
+						return nil, errors.New("Live results not allowed for this election")
+					} else {
+						if name == "metadata" { //because we already got it, why get it again
+							readReturn = metadataRaw
+						} else {
+							readReturn, err = stub.GetState(name) //gets value for the given key
+							if err != nil {                       //getstate error
+								return nil, err
+							}
+						}
+					}
+				} else {
+					//requesting something else
+					readReturn, err = stub.GetState(name) //gets value for the given key
+					if err != nil {                       //getstate error
+						return nil, err
+					}
+				}
 
-	//check that this election is currently running
-	if inTimeSpan(metaDataStruct.StartTime, metaDataStruct.EndTime, time.Now().UTC()) {
-		//election open
-		if stringInArray(name, metaDataStruct.Districts) || name == "metadata" { //requesting results
-			if metaDataStruct.AllowLiveResults == "no" {
-				return nil, errors.New("Live results not allowed for this election")
 			} else {
+				//election closed
 				if name == "metadata" { //because we already got it, why get it again
 					readReturn = metadataRaw
 				} else {
@@ -584,27 +603,12 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 					}
 				}
 			}
-		} else {
-			//requesting something else
-			readReturn, err = stub.GetState(name) //gets value for the given key
-			if err != nil {                       //getstate error
-				return nil, err
-			}
-		}
-
-	} else {
-		//election closed
-		if name == "metadata" { //because we already got it, why get it again
-			readReturn = metadataRaw
-		} else {
-			readReturn, err = stub.GetState(name) //gets value for the given key
-			if err != nil {                       //getstate error
-				return nil, err
-			}
-		}
-	}
-
+	*/
 	//return
+	readReturn, err := stub.GetState(name) //gets value for the given key
+	if err != nil {                        //getstate error
+		return nil, err
+	}
 	if readReturn == nil { //data doesn't exist
 		jsonResp = "{\"Error\":\"No data exists for " + name + "\"}"
 		return nil, errors.New(jsonResp)
